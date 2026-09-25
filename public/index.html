@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DealRadar AI</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; background: #0b1020; color: #f5f7ff; }
+    main { max-width: 980px; margin: 0 auto; padding: 32px 18px; }
+    .hero { padding: 28px; border: 1px solid #27304b; border-radius: 22px; background: linear-gradient(135deg,#151e3b,#101526); }
+    h1 { margin: 0 0 8px; font-size: 36px; }
+    p { color: #b9c2dc; }
+    form { display: flex; gap: 10px; margin-top: 22px; }
+    input, button { border: 0; border-radius: 12px; padding: 13px 15px; font-size: 16px; }
+    input { flex: 1; background: #fff; color: #111; }
+    button { background: #6d7cff; color: #fff; cursor: pointer; }
+    #status { margin: 18px 0; color: #b9c2dc; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(230px,1fr)); gap: 14px; }
+    .card { background: #151c31; border: 1px solid #2b3553; border-radius: 16px; padding: 18px; }
+    .price { font-size: 25px; font-weight: 700; margin: 14px 0; }
+    .muted { color: #9ba8c8; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <h1>DealRadar AI</h1>
+      <p>اكتشف المنتجات وقارن الأسعار في مكان واحد. هذه نسخة تجريبية ببيانات نموذجية إلى أن نربط مصادر أسعار موثوقة.</p>
+      <form id="searchForm">
+        <input id="query" placeholder="ابحث عن لابتوب، SSD، Wi-Fi..." />
+        <button type="submit">بحث</button>
+      </form>
+    </section>
+    <div id="status">جاري تحميل المنتجات...</div>
+    <section id="results" class="grid"></section>
+  </main>
+  <script>
+    const results = document.getElementById('results');
+    const status = document.getElementById('status');
+    async function search(q = '') {
+      status.textContent = 'جاري البحث...';
+      const response = await fetch('/api/products?q=' + encodeURIComponent(q));
+      const data = await response.json();
+      results.innerHTML = data.results.map(p => `
+        <article class="card">
+          <div class="muted">${p.category}</div>
+          <h2>${p.name}</h2>
+          <div class="price">${p.price} ${p.currency}</div>
+          <div class="muted">${p.merchant}</div>
+          <p>رابط الشراء سيُربط بعد اعتماد مصدر تجاري.</p>
+        </article>`).join('');
+      status.textContent = `تم العثور على ${data.count} منتج`;
+    }
+    document.getElementById('searchForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      search(document.getElementById('query').value);
+    });
+    search();
+  </script>
+</body>
+</html>
