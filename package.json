@@ -1,0 +1,16 @@
+{
+  "name": "dealradar-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DealRadar AI price discovery MVP",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
