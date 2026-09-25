@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+# Sitemap will be added after the public domain is configured.
