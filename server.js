@@ -19,7 +19,7 @@ const json = (res, code, payload) => {
   res.writeHead(code, {'content-type':'application/json; charset=utf-8','cache-control':'no-store','access-control-allow-origin':'*','x-content-type-options':'nosniff','x-frame-options':'DENY','referrer-policy':'no-referrer'});
   res.end(JSON.stringify(payload));
 };
-const html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
+const html = fs.readFileSync(path.join(root, 'public/app.html'), 'utf8');
 const rate = new Map();
 function allowed(req) { const ip=req.socket.remoteAddress||'unknown', now=Date.now(); const item=rate.get(ip)||{at:now,count:0}; if(now-item.at>60000){item.at=now;item.count=0;} item.count++; rate.set(ip,item); return item.count<=120; }
 async function body(req){let s='';for await(const chunk of req){s+=chunk;if(s.length>100000)throw new Error('payload too large')}return s?JSON.parse(s):{}}
@@ -49,7 +49,7 @@ const server=http.createServer(async(req,res)=>{try{
   if(!allowed(req))return json(res,429,{error:'rate limit exceeded'});
   const u=new URL(req.url,`http://${req.headers.host||'localhost'}`);
   if(req.method==='OPTIONS'){res.writeHead(204,{'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST,PATCH,OPTIONS','access-control-allow-headers':'content-type,authorization,x-api-key,idempotency-key'});return res.end()}
-  if(req.method==='GET'&&u.pathname==='/api/health')return json(res,200,{ok:true,service:'RevenueFlow',mode:'live',time:new Date().toISOString(),version:'1.3.0'});
+  if(req.method==='GET'&&u.pathname==='/api/health')return json(res,200,{ok:true,service:'RevenueFlow',mode:'live',time:new Date().toISOString(),version:'1.4.0'});
   if(req.method==='GET'&&u.pathname==='/api/dashboard')return json(res,200,dashboard());
   if(req.method==='GET'&&u.pathname==='/api/leads'){
     const q=clean(u.searchParams.get('q'),120).toLowerCase(), status=u.searchParams.get('status');
@@ -72,6 +72,15 @@ const server=http.createServer(async(req,res)=>{try{
     const bySource={}; for(const l of recentLeads){const k=l.source||'manual';bySource[k]=(bySource[k]||0)+1;}
     const byStatus=Object.fromEntries([...validStatuses].map(s=>[s,recentLeads.filter(x=>x.status===s).length]));
     return json(res,200,{days,leads:recentLeads.length,processed:recentRuns.length,byDay,bySource,byStatus});
+  }
+  if(req.method==='POST'&&u.pathname==='/api/demo-request'){
+    const b=await body(req),lead=buildLead({...b,source:'website-demo'},'website-demo');
+    if(!lead.name||!lead.need)return json(res,400,{error:'name and need are required'});
+    if(lead.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email))return json(res,400,{error:'invalid email'});
+    state.leads.push(lead);recordEvent('demo_request',{leadId:lead.id,source:lead.source});
+    const result=scoreLead(lead),run={id:id(),leadId:lead.id,leadName:lead.name,status:lead.status,...result,createdAt:new Date().toISOString()};
+    state.runs.push(run);recordEvent('lead_processed',{leadId:lead.id,priority:result.priority,score:result.score});save();
+    return json(res,201,{ok:true,leadId:lead.id,priority:result.priority});
   }
   if(req.method==='POST'&&u.pathname==='/api/leads'){
     const b=await body(req),lead=buildLead(b,'manual');
@@ -102,7 +111,8 @@ const server=http.createServer(async(req,res)=>{try{
     const leadId=u.pathname.split('/')[3],lead=state.leads.find(x=>x.id===leadId);if(!lead)return json(res,404,{error:'lead not found'});
     const result=scoreLead(lead),run={id:id(),leadId,leadName:lead.name,status:lead.status,...result,createdAt:new Date().toISOString()};state.runs.push(run);recordEvent('lead_processed',{leadId,priority:result.priority,score:result.score});save();return json(res,200,{run});
   }
-  if(req.method==='GET'){res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-cache'});return res.end(html)}
+  if(req.method==='GET'&&u.pathname==='/app'){res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-cache'});return res.end(html)}
+  if(req.method==='GET'&&u.pathname==='/'){res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-cache'});return res.end(fs.readFileSync(path.join(root,'public/landing.html'),'utf8'))}
   return json(res,404,{error:'not found'});
-}catch(e){return json(res,e instanceof SyntaxError?400:e.message==='payload too large'?413:500,{error:e instanceof SyntaxError?'invalid JSON':e.message==='payload too large'?e.message:'internal error'})}});
+}catch(e){return json(res,e instanceof SyntaxError?400:e.message==='payload too large'?413:500,{error:e instanceof SyntaxError?'invalid JSON':e.message==='payload too large'?'payload too large':'internal error'})}});
 const port=Number(process.env.PORT||3000);server.listen(port,()=>console.log(`RevenueFlow listening on ${port}`));
