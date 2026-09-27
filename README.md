@@ -30,5 +30,8 @@ Open `http://localhost:3000`.
 
 Set `REVENUEFLOW_API_KEY` in production to protect `/api/ingest`. For safe retries, send an `Idempotency-Key` header.
 
+## Admin security
+Set `REVENUEFLOW_ADMIN_KEY` before exposing `/app` or the protected dashboard APIs. The dashboard creates an HttpOnly session after login. Keep the key in your deployment secret manager.
+
 ## Storage
 Local mode uses `data/store.json` for simplicity. Production should use a managed database and externalized secrets before handling customer data at scale.
