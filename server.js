@@ -20,6 +20,13 @@ const json = (res, code, payload) => {
   res.end(JSON.stringify(payload));
 };
 const html = fs.readFileSync(path.join(root, 'public/app.html'), 'utf8');
+const adminKey = process.env.REVENUEFLOW_ADMIN_KEY || process.env.REVENUEFLOW_API_KEY || '';
+const sessions = new Map();
+const sessionCookie = 'rf_session';
+function newSession() { const token=crypto.randomBytes(32).toString('hex'); sessions.set(token,Date.now()+8*60*60*1000); return token; }
+function sessionFrom(req){ const raw=String(req.headers.cookie||''); const m=raw.match(/(?:^|;\\s*)rf_session=([^;]+)/); if(!m)return null; const exp=sessions.get(m[1]); if(!exp||exp<Date.now()){sessions.delete(m[1]);return null;} return m[1]; }
+function adminAuth(req){ if(!adminKey)return false; const provided=req.headers.authorization===`Bearer ${adminKey}` || req.headers['x-api-key']===adminKey; return provided || Boolean(sessionFrom(req)); }
+function requireAdmin(req,res){ if(!adminAuth(req)){json(res,401,{error:'admin authentication required'});return false;} return true; }
 const rate = new Map();
 function allowed(req) { const ip=req.socket.remoteAddress||'unknown', now=Date.now(); const item=rate.get(ip)||{at:now,count:0}; if(now-item.at>60000){item.at=now;item.count=0;} item.count++; rate.set(ip,item); return item.count<=120; }
 async function body(req){let s='';for await(const chunk of req){s+=chunk;if(s.length>100000)throw new Error('payload too large')}return s?JSON.parse(s):{}}
@@ -49,9 +56,18 @@ const server=http.createServer(async(req,res)=>{try{
   if(!allowed(req))return json(res,429,{error:'rate limit exceeded'});
   const u=new URL(req.url,`http://${req.headers.host||'localhost'}`);
   if(req.method==='OPTIONS'){res.writeHead(204,{'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST,PATCH,OPTIONS','access-control-allow-headers':'content-type,authorization,x-api-key,idempotency-key'});return res.end()}
-  if(req.method==='GET'&&u.pathname==='/api/health')return json(res,200,{ok:true,service:'RevenueFlow',mode:'live',time:new Date().toISOString(),version:'1.4.0'});
-  if(req.method==='GET'&&u.pathname==='/api/dashboard')return json(res,200,dashboard());
-  if(req.method==='GET'&&u.pathname==='/api/leads'){
+  if(req.method==='GET'&&u.pathname==='/api/health')return json(res,200,{ok:true,service:'RevenueFlow',mode:'live',time:new Date().toISOString(),version:'1.5.0'});
+  if(req.method==='POST'&&u.pathname==='/api/login'){
+    if(!adminKey)return json(res,503,{error:'admin authentication is not configured'});
+    const b=await body(req); if(String(b.key||'')!==adminKey)return json(res,401,{error:'invalid credentials'});
+    const token=newSession(); res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store','set-cookie':`${sessionCookie}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800`,'x-content-type-options':'nosniff'}); return res.end(JSON.stringify({ok:true}));
+  }
+  if(req.method==='POST'&&u.pathname==='/api/logout'){
+    const token=sessionFrom(req); if(token)sessions.delete(token); res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store','set-cookie':`${sessionCookie}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`}); return res.end(JSON.stringify({ok:true}));
+  }
+  if(req.method==='GET'&&u.pathname==='/api/session')return json(res,200,{authenticated:adminAuth(req),configured:Boolean(adminKey)});
+  if(req.method==='GET'&&u.pathname==='/api/dashboard'){if(!requireAdmin(req,res))return;return json(res,200,dashboard());}
+  if(req.method==='GET'&&u.pathname==='/api/leads'){if(!requireAdmin(req,res))return;
     const q=clean(u.searchParams.get('q'),120).toLowerCase(), status=u.searchParams.get('status');
     const limit=Math.max(1,Math.min(200,Number(u.searchParams.get('limit')||50))), offset=Math.max(0,Number(u.searchParams.get('offset')||0));
     let leads=state.leads.slice().reverse();
@@ -59,11 +75,11 @@ const server=http.createServer(async(req,res)=>{try{
     if(status&&validStatuses.has(status)) leads=leads.filter(x=>x.status===status);
     return json(res,200,{total:leads.length,leads:leads.slice(offset,offset+limit)});
   }
-  if(req.method==='GET'&&u.pathname==='/api/runs'){
+  if(req.method==='GET'&&u.pathname==='/api/runs'){if(!requireAdmin(req,res))return;
     const limit=Math.max(1,Math.min(200,Number(u.searchParams.get('limit')||50))), offset=Math.max(0,Number(u.searchParams.get('offset')||0));
     const runs=state.runs.slice().reverse(); return json(res,200,{total:runs.length,runs:runs.slice(offset,offset+limit)});
   }
-  if(req.method==='GET'&&u.pathname==='/api/analytics'){
+  if(req.method==='GET'&&u.pathname==='/api/analytics'){if(!requireAdmin(req,res))return;
     const days=Math.max(1,Math.min(90,Number(u.searchParams.get('days')||30)));
     const cutoff=Date.now()-days*86400000;
     const recentLeads=state.leads.filter(x=>Date.parse(x.createdAt)>=cutoff);
@@ -82,7 +98,7 @@ const server=http.createServer(async(req,res)=>{try{
     state.runs.push(run);recordEvent('lead_processed',{leadId:lead.id,priority:result.priority,score:result.score});save();
     return json(res,201,{ok:true,leadId:lead.id,priority:result.priority});
   }
-  if(req.method==='POST'&&u.pathname==='/api/leads'){
+  if(req.method==='POST'&&u.pathname==='/api/leads'){if(!requireAdmin(req,res))return;
     const b=await body(req),lead=buildLead(b,'manual');
     if(!lead.name||!lead.need)return json(res,400,{error:'name and need are required'});
     if(lead.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email))return json(res,400,{error:'invalid email'});
@@ -100,14 +116,14 @@ const server=http.createServer(async(req,res)=>{try{
     state.runs.push(run);recordEvent('lead_processed',{leadId:lead.id,priority:result.priority,score:result.score});save();
     return json(res,201,{lead,run});
   }
-  if(req.method==='PATCH'&&u.pathname.startsWith('/api/leads/')){
+  if(req.method==='PATCH'&&u.pathname.startsWith('/api/leads/')){if(!requireAdmin(req,res))return;
     const parts=u.pathname.split('/'),leadId=parts[3];
     if(parts.length!==4)return json(res,404,{error:'not found'});
     const lead=state.leads.find(x=>x.id===leadId);if(!lead)return json(res,404,{error:'lead not found'});
     const b=await body(req);if(!validStatuses.has(b.status))return json(res,400,{error:'invalid status',allowed:[...validStatuses]});
     const previous=lead.status;lead.status=b.status;lead.updatedAt=new Date().toISOString();recordEvent('lead_status_changed',{leadId,from:previous,to:lead.status});save();return json(res,200,{lead});
   }
-  if(req.method==='POST'&&u.pathname.startsWith('/api/leads/')&&u.pathname.endsWith('/run')){
+  if(req.method==='POST'&&u.pathname.startsWith('/api/leads/')&&u.pathname.endsWith('/run')){if(!requireAdmin(req,res))return;
     const leadId=u.pathname.split('/')[3],lead=state.leads.find(x=>x.id===leadId);if(!lead)return json(res,404,{error:'lead not found'});
     const result=scoreLead(lead),run={id:id(),leadId,leadName:lead.name,status:lead.status,...result,createdAt:new Date().toISOString()};state.runs.push(run);recordEvent('lead_processed',{leadId,priority:result.priority,score:result.score});save();return json(res,200,{run});
   }
