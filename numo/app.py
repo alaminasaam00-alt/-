@@ -125,6 +125,7 @@ def health():
 
 def _background_scan():
     time.sleep(5)
+    print("NOVA_RADAR_SCHEDULER_STARTED", flush=True)
     while True:
         try:
             if _scan_lock.acquire(blocking=False):
@@ -132,8 +133,8 @@ def _background_scan():
                     run_ingestion()
                 finally:
                     _scan_lock.release()
-        except Exception:
-            pass
+        except Exception as e:
+            print("NOVA_RADAR_SCAN_ERROR", repr(e), flush=True)
         time.sleep(1800)
 
 threading.Thread(target=_background_scan,daemon=True,name="radar-scheduler").start()
