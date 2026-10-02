@@ -1,0 +1,1 @@
+FROM python:3.13-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\nCOPY app.py .\nENV PORT=8080\nCMD ["sh","-c","uvicorn app:app --host 0.0.0.0 --port ${PORT:-8080}"]\n
