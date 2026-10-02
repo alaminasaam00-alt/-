@@ -20,7 +20,7 @@ _last_scan=0.0
 _scan_lock=threading.Lock()
 
 SOURCES=[
- {"id":"grants_us","name":"Grants.gov","type":"grant","url":"https://www.grants.gov/v1/api/search2"},
+ {"id":"grants_us","name":"Grants.gov","type":"grant","url":"https://api.grants.gov/v1/api/search2"},
  {"id":"ted_comp","name":"TED — Computer & IT","type":"tender","url":"https://ted.europa.eu/en/simap/rss-feed/-/rss/search/comp"},
  {"id":"ted_serv","name":"TED — Services","type":"tender","url":"https://ted.europa.eu/en/simap/rss-feed/-/rss/search/serv"},
  {"id":"ted_ener","name":"TED — Energy","type":"tender","url":"https://ted.europa.eu/en/simap/rss-feed/-/rss/search/ener"},
@@ -117,7 +117,7 @@ def run_ingestion():
         except Exception as e:
             c.execute(q("INSERT INTO runs VALUES(?,?,?,?,?,?)"),(runid,src["id"],"error",0,str(e)[:500],now)); c.commit(); results.append((src["id"],0,"error"))
         finally: c.close()
-    match_all(); return results
+    match_all(); print("NOVA_RADAR_SCAN", results, flush=True); return results
 
 @app.get("/health")
 def health():
