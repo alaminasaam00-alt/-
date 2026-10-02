@@ -1,0 +1,11 @@
+name: NOVA RADAR scan
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scan sources
+        run: curl -fsS --max-time 90 https://numo-nova.onrender.com/api/scan
