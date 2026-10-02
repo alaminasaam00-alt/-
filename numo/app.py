@@ -78,7 +78,7 @@ def upsert(source_id,external_id,title,desc,url,deadline="",amount="",country=""
     if existing:
         c.execute(q("UPDATE opportunities SET title=?,description=?,url=?,deadline=?,amount=?,country=?,kind=?,last_seen=? WHERE id=?"),(title,desc,url,deadline,amount,country,kind,now,oid))
     else:
-        c.execute(q("INSERT INTO opportunities VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)"),(oid,source_id,external_id,title,desc,url,deadline,amount,country,kind,0,now,now))
+        c.execute(q("INSERT INTO opportunities VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)"),(oid,source_id,external_id,title,desc,url,deadline,amount,country,kind,0,now,now))
     c.commit(); c.close(); return oid
 
 def ingest_grants():
