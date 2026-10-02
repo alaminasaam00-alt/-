@@ -1,16 +1,8 @@
-FROM node:20-alpine
-
+FROM python:3.13-slim
 WORKDIR /app
-
-COPY package.json ./
-RUN npm install --omit=dev
-
-COPY server.js ./
-COPY public ./public
-
-ENV NODE_ENV=production
-ENV PORT=3000
-
-EXPOSE 3000
-
-CMD ["node", "server.js"]
+COPY numo/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+COPY numo/app.py ./app.py
+ENV PYTHONUNBUFFERED=1
+EXPOSE 10000
+CMD ["uvicorn","app:app","--host","0.0.0.0","--port","10000"]
