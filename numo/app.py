@@ -90,7 +90,7 @@ def ingest_grants():
     return n
 
 def ingest_rss(src):
-    feed=feedparser.parse(src["url"]); n=0
+    resp=httpx.get(src["url"],headers={"User-Agent":"NOVA-RADAR/1.1 (+https://numo-nova.onrender.com)"},timeout=30,follow_redirects=True); resp.raise_for_status(); feed=feedparser.parse(resp.content); n=0
     for e in feed.entries[:120]:
         ext=e.get("id") or e.get("link") or e.get("title")
         title=e.get("title","").strip(); desc=re.sub("<[^>]+>"," ",e.get("summary",""))
@@ -115,7 +115,7 @@ def run_ingestion():
             n=ingest_grants() if src["id"]=="grants_us" else ingest_rss(src)
             c.execute(q("INSERT INTO runs VALUES(?,?,?,?,?,?)"),(runid,src["id"],"ok",n,"",now)); c.commit(); results.append((src["id"],n,"ok"))
         except Exception as e:
-            c.execute(q("INSERT INTO runs VALUES(?,?,?,?,?,?)"),(runid,src["id"],"error",0,str(e)[:500],now)); c.commit(); results.append((src["id"],0,"error"))
+            c.execute(q("INSERT INTO runs VALUES(?,?,?,?,?,?)"),(runid,src["id"],"error",0,str(e)[:500],now)); c.commit(); print("NOVA_RADAR_SOURCE_ERROR",src["id"],repr(e),flush=True); results.append((src["id"],0,"error"))
         finally: c.close()
     match_all(); print("NOVA_RADAR_SCAN", results, flush=True); return results
 
