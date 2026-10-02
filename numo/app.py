@@ -20,7 +20,7 @@ _last_scan=0.0
 _scan_lock=threading.Lock()
 
 SOURCES=[
- {"id":"grants_us","name":"Grants.gov","type":"grant","url":"https://api.grants.gov/v1/api/search2"},
+ {"id":"grants_us","name":"Grants.gov RSS","type":"grant","url":"https://www.grants.gov/rss/GG_OppModByCategory.xml"},
  {"id":"ted_comp","name":"TED — Computer & IT","type":"tender","url":"https://ted.europa.eu/en/simap/rss-feed/-/rss/search/comp"},
  {"id":"ted_serv","name":"TED — Services","type":"tender","url":"https://ted.europa.eu/en/simap/rss-feed/-/rss/search/serv"},
  {"id":"ted_ener","name":"TED — Energy","type":"tender","url":"https://ted.europa.eu/en/simap/rss-feed/-/rss/search/ener"},
@@ -127,7 +127,7 @@ def run_ingestion():
     for src in SOURCES:
         c=conn(); runid="run_"+secrets.token_hex(7); now=datetime.now(timezone.utc).isoformat()
         try:
-            n=ingest_grants() if src["id"]=="grants_us" else (ingest_worldbank() if src["id"]=="worldbank" else ingest_rss(src))
+            n=ingest_rss(src) if src["id"]=="grants_us" else (ingest_worldbank() if src["id"]=="worldbank" else ingest_rss(src))
             c.execute(q("INSERT INTO runs VALUES(?,?,?,?,?,?)"),(runid,src["id"],"ok",n,"",now)); c.commit(); results.append((src["id"],n,"ok"))
         except Exception as e:
             c.execute(q("INSERT INTO runs VALUES(?,?,?,?,?,?)"),(runid,src["id"],"error",0,str(e)[:500],now)); c.commit(); print("NOVA_RADAR_SOURCE_ERROR",src["id"],repr(e),flush=True); results.append((src["id"],0,"error"))
