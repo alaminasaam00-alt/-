@@ -25,7 +25,8 @@ SOURCES=[
  {"id":"ted_serv","name":"TED — Services","type":"tender","url":"https://ted.europa.eu/en/simap/rss-feed/-/rss/search/serv"},
  {"id":"ted_ener","name":"TED — Energy","type":"tender","url":"https://ted.europa.eu/en/simap/rss-feed/-/rss/search/ener"},
  {"id":"ted_tran","name":"TED — Transport","type":"tender","url":"https://ted.europa.eu/en/simap/rss-feed/-/rss/search/tran"},
- {"id":"ted_reco","name":"TED — R&D","type":"tender","url":"https://ted.europa.eu/en/simap/rss-feed/-/rss/search/reco"}]
+ {"id":"ted_reco","name":"TED — R&D","type":"tender","url":"https://ted.europa.eu/en/simap/rss-feed/-/rss/search/reco"},
+ {"id":"worldbank","name":"World Bank Procurement","type":"tender","url":"https://search.worldbank.org/api/v2/procnotices"}]
 
 def conn():
     if PG: return psycopg.connect(DATABASE_URL,row_factory=dict_row)
@@ -107,12 +108,26 @@ def match_all():
                 c.execute(q("INSERT INTO matches(id,user_id,opportunity_id,score,status,created_at) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id,opportunity_id) DO UPDATE SET score=excluded.score"),(mid,p["user_id"],o["id"],sc,"new",datetime.now(timezone.utc).isoformat()))
     c.commit(); c.close()
 
+def ingest_worldbank():
+    url="https://search.worldbank.org/api/v2/procnotices"
+    r=httpx.get(url,params={"format":"json","rows":100,"os":0,"srt":"noticedate desc,id asc"},headers={"User-Agent":"NOVA-RADAR/1.1 (+https://numo-nova.onrender.com)"},timeout=30)
+    r.raise_for_status(); data=r.json().get("procnotices",[])
+    if isinstance(data,dict): data=list(data.values())
+    n=0
+    for x in data:
+        ext=str(x.get("id") or x.get("bid_reference_no") or secrets.token_hex(6))
+        title=x.get("bid_description") or x.get("project_name") or x.get("notice_type") or "World Bank procurement notice"
+        desc=" ".join(str(x.get(k) or "") for k in ["project_name","bid_description","notice_type","procurement_method_name"])
+        url2=x.get("url") or ("https://projects.worldbank.org/en/projects-operations/procurement-detail/"+ext)
+        upsert("worldbank",ext,title,desc,url2,x.get("submission_date",""),"",x.get("project_ctry_name",""),"tender"); n+=1
+    return n
+
 def run_ingestion():
     results=[]
     for src in SOURCES:
         c=conn(); runid="run_"+secrets.token_hex(7); now=datetime.now(timezone.utc).isoformat()
         try:
-            n=ingest_grants() if src["id"]=="grants_us" else ingest_rss(src)
+            n=ingest_grants() if src["id"]=="grants_us" else (ingest_worldbank() if src["id"]=="worldbank" else ingest_rss(src))
             c.execute(q("INSERT INTO runs VALUES(?,?,?,?,?,?)"),(runid,src["id"],"ok",n,"",now)); c.commit(); results.append((src["id"],n,"ok"))
         except Exception as e:
             c.execute(q("INSERT INTO runs VALUES(?,?,?,?,?,?)"),(runid,src["id"],"error",0,str(e)[:500],now)); c.commit(); print("NOVA_RADAR_SOURCE_ERROR",src["id"],repr(e),flush=True); results.append((src["id"],0,"error"))
