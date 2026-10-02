@@ -1,7 +1,7 @@
 import os, re, sqlite3, secrets, json, hashlib
 from datetime import datetime, timezone, timedelta
 from urllib.parse import quote
-import httpx, feedparser
+import httpx, feedparser, threading, time
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
@@ -15,7 +15,9 @@ PG=bool(DATABASE_URL)
 if PG:
     import psycopg
     from psycopg.rows import dict_row
-app=FastAPI(title="NOVA RADAR",version="1.0.0")
+app=FastAPI(title="NOVA RADAR",version="1.1.0")
+_last_scan=0.0
+_scan_lock=threading.Lock()
 
 SOURCES=[
  {"id":"grants_us","name":"Grants.gov","type":"grant","url":"https://www.grants.gov/v1/api/search2"},
@@ -55,7 +57,7 @@ def audit(action,payload):
 
 def token_for(email): return hashlib.sha256((email+"|nova-radar").encode()).hexdigest()[:24]
 
-def score_item(title,desc,keywords,regions,kind,country):
+def score_item(title,desc,keywords,regions,types_text,kind,country):
     text=(title+" "+desc).lower()
     kws=[x.strip().lower() for x in re.split(r"[,;\n]+",keywords) if x.strip()]
     score=0
@@ -99,7 +101,7 @@ def match_all():
     c=conn(); profiles=c.execute("SELECT * FROM profiles").fetchall(); opps=c.execute("SELECT * FROM opportunities ORDER BY last_seen DESC LIMIT 1000").fetchall()
     for p in profiles:
         for o in opps:
-            sc=score_item(o["title"],o["description"],p["keywords"],p["regions"],o["kind"],o["country"])
+            sc=score_item(o["title"],o["description"],p["keywords"],p["regions"],p["types"],o["kind"],o["country"])
             if sc>=int(p["min_score"]):
                 mid="mat_"+hashlib.sha1((p["user_id"]+"|"+o["id"]).encode()).hexdigest()[:18]
                 c.execute(q("INSERT INTO matches(id,user_id,opportunity_id,score,status,created_at) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id,opportunity_id) DO UPDATE SET score=excluded.score"),(mid,p["user_id"],o["id"],sc,"new",datetime.now(timezone.utc).isoformat()))
@@ -120,6 +122,21 @@ def run_ingestion():
 @app.get("/health")
 def health():
     c=conn(); c.execute(q("SELECT 1")); c.close(); return {"status":"ok","service":"nova-radar","version":"1.0.0","sources":len(SOURCES)}
+
+def _background_scan():
+    time.sleep(5)
+    while True:
+        try:
+            if _scan_lock.acquire(blocking=False):
+                try:
+                    run_ingestion()
+                finally:
+                    _scan_lock.release()
+        except Exception:
+            pass
+        time.sleep(1800)
+
+threading.Thread(target=_background_scan,daemon=True,name="radar-scheduler").start()
 
 @app.get("/api/sources")
 def sources(): return SOURCES
@@ -182,7 +199,7 @@ def stats():
 
 @app.get("/",response_class=HTMLResponse)
 def home():
-    return """<!doctype html><html lang='ar' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>NOVA RADAR</title><style>body{font-family:system-ui;background:#07111f;color:#eef6ff;margin:0}.wrap{max-width:1050px;margin:auto;padding:28px}.hero,.card{background:#0e1b2e;border:1px solid #203653;border-radius:20px;padding:24px;margin:14px 0}.hero{background:linear-gradient(145deg,#102b46,#0b1728)}h1{font-size:42px;margin:0 0 8px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.pill{display:inline-block;padding:6px 10px;border-radius:999px;background:#173552;margin:3px}.price{font-size:25px;font-weight:700}input,button{width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #34516f;background:#091626;color:#fff;margin:5px 0}button{background:#1b7cff;border:0;font-weight:700;cursor:pointer}.muted{color:#a9bdd1}.opp{border-top:1px solid #29415e;padding:14px 0}.score{font-weight:800;color:#6ee7b7}</style><body><div class='wrap'><div class='hero'><h1>رادار الفرص الذكي</h1><p>محرك يعمل باستمرار لالتقاط المناقصات والمنح والفرص العامة، تصفيتها حسب نشاطك وترتيبها حسب مدى ملاءمتها.</p><span class='pill'>TED</span><span class='pill'>Grants.gov</span><span class='pill'>فحص دوري</span><span class='pill'>مطابقة ذكية</span></div><div class='grid'><div class='card'><h2>Starter</h2><div class='price'>5,000 SDG / شهر</div><p>ملف فرصة + تنبيهات أساسية.</p></div><div class='card'><h2>Pro</h2><div class='price'>15,000 SDG / شهر</div><p>مطابقة أعمق + نتائج أكثر.</p></div><div class='card'><h2>Business</h2><div class='price'>30,000 SDG / شهر</div><p>فرق وملفات متعددة.</p></div></div><div class='card'><h2>ابدأ ملفك</h2><input id='name' placeholder='الاسم'><input id='email' placeholder='البريد'><input id='keywords' placeholder='مثال: software, cybersecurity, solar'><input id='regions' placeholder='الدول/المناطق المطلوبة (اختياري)'><button onclick='start()'>إنشاء الملف وبدء الرصد</button><pre id='out'></pre></div><div class='card'><h2>الفرص الحالية</h2><button onclick='loadOpps()'>تحديث النتائج</button><div id='ops' class='muted'>أنشئ ملفاً أولاً.</div></div></div><script>let uid=localStorage.uid;async function start(){let r=await fetch('/api/signup',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:name.value,email:email.value})});let x=await r.json();uid=x.user_id;localStorage.uid=uid;await fetch('/api/profile',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({user_id:uid,keywords:keywords.value,regions:regions.value,types:'tender,grant',min_score:20})});out.textContent='تم إنشاء الملف. يتم تحديث الرادار دورياً.';loadOpps()}async function loadOpps(){if(!uid)return;let r=await fetch('/api/opportunities?user_id='+encodeURIComponent(uid));let xs=await r.json();ops.innerHTML=xs.length?xs.map(o=>'<div class="opp"><b>'+o.title+'</b><div class="score">ملاءمة: '+o.match_score+'%</div><div>'+o.source_id+' — '+(o.country||'')+'</div><a href="'+o.url+'" target="_blank" rel="noopener" style="color:#8fc7ff">فتح المصدر</a></div>').join(''):'لا توجد نتائج مطابقة بعد.'}loadOpps();</script></body></html>"""
+    return """<!doctype html><html lang='ar' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>NOVA RADAR</title><style>body{font-family:system-ui;background:#07111f;color:#eef6ff;margin:0}.wrap{max-width:1050px;margin:auto;padding:28px}.hero,.card{background:#0e1b2e;border:1px solid #203653;border-radius:20px;padding:24px;margin:14px 0}.hero{background:linear-gradient(145deg,#102b46,#0b1728)}h1{font-size:42px;margin:0 0 8px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.pill{display:inline-block;padding:6px 10px;border-radius:999px;background:#173552;margin:3px}.price{font-size:25px;font-weight:700}input,button{width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #34516f;background:#091626;color:#fff;margin:5px 0}button{background:#1b7cff;border:0;font-weight:700;cursor:pointer}.muted{color:#a9bdd1}.opp{border-top:1px solid #29415e;padding:14px 0}.score{font-weight:800;color:#6ee7b7}</style><body><div class='wrap'><div class='hero'><h1>رادار الفرص الذكي</h1><p>محرك يعمل باستمرار لالتقاط المناقصات والمنح والفرص العامة، تصفيتها حسب نشاطك وترتيبها حسب مدى ملاءمتها.</p><span class='pill'>TED</span><span class='pill'>Grants.gov</span><span class='pill'>فحص دوري</span><span class='pill'>مطابقة ذكية</span></div><div class='grid'><div class='card'><h2>Starter</h2><div class='price'>5,000 SDG / شهر</div><p>ملف فرصة + تنبيهات أساسية.</p></div><div class='card'><h2>Pro</h2><div class='price'>15,000 SDG / شهر</div><p>مطابقة أعمق + نتائج أكثر.</p></div><div class='card'><h2>Business</h2><div class='price'>30,000 SDG / شهر</div><p>فرق وملفات متعددة.</p></div></div><div class='card'><h2>ابدأ ملفك</h2><input id='name' placeholder='الاسم'><input id='email' placeholder='البريد'><input id='keywords' placeholder='مثال: software, cybersecurity, solar'><input id='regions' placeholder='الدول/المناطق المطلوبة (اختياري)'><button onclick='start()'>إنشاء الملف وبدء الرصد</button><pre id='out'></pre></div><div class='card'><h2>الفرص الحالية</h2><button onclick='loadOpps()'>تحديث النتائج</button><div id='ops' class='muted'>أنشئ ملفاً أولاً.</div></div></div><script>let uid=localStorage.getItem("uid");async function start(){let r=await fetch('/api/signup',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:document.getElementById("name").value.trim(),email:document.getElementById("email").value.trim()})});let x=await r.json();uid=x.user_id;localStorage.uid=uid;await fetch('/api/profile',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({user_id:uid,keywords:document.getElementById("keywords").value,regions:document.getElementById("regions").value,types:'tender,grant',min_score:20})});out.textContent='تم إنشاء الملف. يتم تحديث الرادار دورياً.';loadOpps()}async function loadOpps(){if(!uid)return;let r=await fetch('/api/opportunities?user_id='+encodeURIComponent(uid));let xs=await r.json();ops.innerHTML=xs.length?xs.map(o=>'<div class="opp"><b>'+o.title+'</b><div class="score">ملاءمة: '+o.match_score+'%</div><div>'+o.source_id+' — '+(o.country||'')+'</div><a href="'+o.url+'" target="_blank" rel="noopener" style="color:#8fc7ff">فتح المصدر</a></div>').join(''):'لا توجد نتائج مطابقة بعد.'}loadOpps();</script></body></html>"""
 
 if __name__=="__main__":
     import uvicorn
