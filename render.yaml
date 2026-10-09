@@ -1,0 +1,56 @@
+databases:
+  - name: sudan-market-db
+    plan: basic-256mb
+    region: frankfurt
+    databaseName: sudan_market
+    user: market_app
+
+services:
+  - type: web
+    name: sudan-market-web
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sudan-market-db
+          property: connectionString
+      - key: DATABASE_SSL
+        value: "true"
+      - key: ADMIN_SECRET
+        generateValue: true
+
+  - type: worker
+    name: sudan-market-worker
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: npm ci --omit=dev
+    startCommand: node worker.js
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sudan-market-db
+          property: connectionString
+      - key: DATABASE_SSL
+        value: "true"
+
+  - type: cron
+    name: sudan-market-maintenance
+    runtime: node
+    plan: starter
+    region: frankfurt
+    schedule: "*/15 * * * *"
+    buildCommand: npm ci --omit=dev
+    startCommand: node cron.js
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sudan-market-db
+          property: connectionString
+      - key: DATABASE_SSL
+        value: "true"
