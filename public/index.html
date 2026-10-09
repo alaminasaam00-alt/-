@@ -1,62 +1,12 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>DealRadar AI</title>
-  <style>
-    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
-    body { margin: 0; background: #0b1020; color: #f5f7ff; }
-    main { max-width: 980px; margin: 0 auto; padding: 32px 18px; }
-    .hero { padding: 28px; border: 1px solid #27304b; border-radius: 22px; background: linear-gradient(135deg,#151e3b,#101526); }
-    h1 { margin: 0 0 8px; font-size: 36px; }
-    p { color: #b9c2dc; }
-    form { display: flex; gap: 10px; margin-top: 22px; }
-    input, button { border: 0; border-radius: 12px; padding: 13px 15px; font-size: 16px; }
-    input { flex: 1; background: #fff; color: #111; }
-    button { background: #6d7cff; color: #fff; cursor: pointer; }
-    #status { margin: 18px 0; color: #b9c2dc; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(230px,1fr)); gap: 14px; }
-    .card { background: #151c31; border: 1px solid #2b3553; border-radius: 16px; padding: 18px; }
-    .price { font-size: 25px; font-weight: 700; margin: 14px 0; }
-    .muted { color: #9ba8c8; font-size: 14px; }
-  </style>
-</head>
-<body>
-  <main>
-    <section class="hero">
-      <h1>DealRadar AI</h1>
-      <p>اكتشف المنتجات وقارن الأسعار في مكان واحد. هذه نسخة تجريبية ببيانات نموذجية إلى أن نربط مصادر أسعار موثوقة.</p>
-      <form id="searchForm">
-        <input id="query" placeholder="ابحث عن لابتوب، SSD، Wi-Fi..." />
-        <button type="submit">بحث</button>
-      </form>
-    </section>
-    <div id="status">جاري تحميل المنتجات...</div>
-    <section id="results" class="grid"></section>
-  </main>
-  <script>
-    const results = document.getElementById('results');
-    const status = document.getElementById('status');
-    async function search(q = '') {
-      status.textContent = 'جاري البحث...';
-      const response = await fetch('/api/products?q=' + encodeURIComponent(q));
-      const data = await response.json();
-      results.innerHTML = data.results.map(p => `
-        <article class="card">
-          <div class="muted">${p.category}</div>
-          <h2>${p.name}</h2>
-          <div class="price">${p.price} ${p.currency}</div>
-          <div class="muted">${p.merchant}</div>
-          <p>رابط الشراء سيُربط بعد اعتماد مصدر تجاري.</p>
-        </article>`).join('');
-      status.textContent = `تم العثور على ${data.count} منتج`;
-    }
-    document.getElementById('searchForm').addEventListener('submit', (e) => {
-      e.preventDefault();
-      search(document.getElementById('query').value);
-    });
-    search();
-  </script>
-</body>
-</html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>سوق السودان | منصة التجارة</title><style>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#172033;background:#f5f7fb}*{box-sizing:border-box}body{margin:0}header{background:#111827;color:#fff;padding:18px}header .wrap,main{max-width:1100px;margin:auto}.brand{font-size:25px;font-weight:800}.tag{color:#cbd5e1;font-size:14px;margin-top:4px}.hero{background:linear-gradient(135deg,#18233d,#0f172a);color:white;padding:42px 20px}.hero h1{font-size:38px;margin:0 0 10px}.hero p{color:#cbd5e1;max-width:700px}.search{display:flex;gap:10px;margin-top:22px}.search input{flex:1}.input,button{border:0;border-radius:12px;padding:14px;font-size:16px}.input{background:white;color:#111827}button{background:#16a34a;color:#fff;font-weight:700;cursor:pointer}.wrap{padding:0 16px}.toolbar{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:22px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}.card{background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:18px;box-shadow:0 5px 20px #1118270a}.card h2{font-size:19px;margin:8px 0}.muted{color:#64748b;font-size:14px}.price{font-size:23px;font-weight:800;margin:14px 0}.card button{width:100%}.modal{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;padding:16px}.modal.show{display:flex}.box{background:#fff;border-radius:20px;padding:22px;max-width:500px;width:100%}.box input{width:100%;margin:7px 0}.notice{padding:12px;border-radius:12px;background:#ecfdf5;color:#166534;margin:12px 0}.danger{color:#b91c1c}.empty{text-align:center;padding:40px;color:#64748b}@media(max-width:600px){.hero h1{font-size:30px}.search{flex-direction:column}}
+</style></head><body><header><div class="wrap"><div class="brand">سوق السودان</div><div class="tag">منصة تجارة سودانية بسيطة وسريعة</div></div></header><section class="hero"><div class="wrap"><h1>ابحث، اطلب، وحوّل بأمان</h1><p>واجهة واحدة للمنتجات والطلبات. التحقق من التحويل يتم من لوحة الإدارة قبل اعتماد الطلب.</p><form class="search" id="search"><input class="input" id="q" placeholder="ابحث عن هاتف، لابتوب، راوتر..."><button>بحث</button></form></div></section><main class="wrap"><div class="toolbar"><strong id="status">تحميل المنتجات...</strong><select class="input" id="category"><option value="">كل الأقسام</option></select></div><section class="grid" id="products"></section></main><div class="modal" id="modal"><div class="box"><h2>إتمام الطلب</h2><div id="selected"></div><input class="input" id="name" placeholder="الاسم"><input class="input" id="phone" placeholder="رقم الهاتف"><button id="create">إنشاء الطلب</button><div id="result"></div><button style="margin-top:8px;background:#64748b" onclick="closeModal()">إغلاق</button></div></div><script>
+let selected=null, config={}; const products=document.getElementById('products'),status=document.getElementById('status'),modal=document.getElementById('modal');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function load(){try{config=await fetch('/api/config').then(r=>r.json());const cats=await fetch('/api/categories').then(r=>r.json());document.getElementById('category').innerHTML='<option value="">كل الأقسام</option>'+cats.results.map(x=>`<option>${esc(x)}</option>`).join(''); await search()}catch(e){status.textContent='تعذر تحميل البيانات'}}
+async function search(){status.textContent='جاري البحث...';const q=document.getElementById('q').value,cat=document.getElementById('category').value;const d=await fetch('/api/products?q='+encodeURIComponent(q)+'&category='+encodeURIComponent(cat)).then(r=>r.json());status.textContent=`${d.count} منتج`;products.innerHTML=d.results.length?d.results.map(p=>`<article class="card"><div class="muted">${esc(p.category)}</div><h2>${esc(p.name)}</h2><div class="price">${Number(p.price).toLocaleString('ar-SD')} ${esc(p.currency)}</div><div class="muted">${esc(p.merchant||'متجر')}</div><button onclick='openOrder(${JSON.stringify(p).replace(/</g,'\\u003c')})'>اطلب الآن</button></article>`).join(''):'<div class="empty">لا توجد منتجات مطابقة.</div>'}
+function openOrder(p){selected=p;document.getElementById('selected').innerHTML=`<div class="notice">${esc(p.name)} — ${Number(p.price).toLocaleString('ar-SD')} ${esc(p.currency)}</div>`;document.getElementById('result').innerHTML='';modal.classList.add('show')}
+function closeModal(){modal.classList.remove('show')}
+document.getElementById('search').onsubmit=e=>{e.preventDefault();search()};document.getElementById('category').onchange=search;document.getElementById('create').onclick=async()=>{const name=document.getElementById('name').value.trim(),phone=document.getElementById('phone').value.trim();if(!name||!phone)return alert('أدخل الاسم ورقم الهاتف');const r=await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customerName:name,customerPhone:phone,items:[{productId:selected.id,quantity:1}]})});const d=await r.json();document.getElementById('result').innerHTML=r.ok?`<div class="notice">تم إنشاء الطلب: <b>${esc(d.order.id)}</b><br>${esc(d.paymentInstructions)}</div>`:`<div class="danger">${esc(d.error||'حدث خطأ')}</div>`};load();
+</script></body></html>
