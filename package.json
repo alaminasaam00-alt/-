@@ -1,16 +1,19 @@
 {
-  "name": "dealradar-ai",
-  "version": "0.1.0",
+  "name": "sudan-market-platform",
+  "version": "1.0.0",
   "private": true,
-  "description": "DealRadar AI price discovery MVP",
+  "description": "Automated Sudan marketplace foundation",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test"
   },
-  "engines": {
-    "node": ">=20"
-  },
+  "engines": { "node": ">=20" },
   "dependencies": {
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "helmet": "^8.1.0",
+    "express-rate-limit": "^7.5.0",
+    "pg": "^8.16.3",
+    "pino-http": "^10.5.0"
   }
 }
